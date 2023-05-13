@@ -1,0 +1,191 @@
+from bs4 import BeautifulSoup
+import numpy as np
+import pandas as pd
+import re
+import urllib
+def gp_date(soup):
+  soup=BeautifulSoup(html_text,'lxml')
+  a=soup.find_all('tr')
+  data=[]
+  for i in range(1,len(a)):
+      item['Race day']=(a[i].find('td', class_="dark hide-for-mobile").text)[0:2]
+      item['race month']=(a[i].find('td', class_="dark hide-for-mobile").text)[3:7]
+      data.append(item)
+  return data
+def extracting_gp_links(year):
+  url=f'https://www.formula1.com/en/results.html/{year}/races.html'
+  html_text=urllib.request.urlopen(url)
+  soup=BeautifulSoup(html_text,'lxml')
+  GP_day_month=pd.DataFrame(gp_date())
+  main_list=soup.find('div',class_="resultsarchive-filter-container")
+  sub_list=main_list.find_all('div',class_="resultsarchive-filter-wrap")
+  track_location=main_list.find_all('span',class_="circuit-info")
+  a=soup.find('td',class_="dark hide-for-mobile").text
+  track_list=sub_list[2].find_all('a')
+  list_of_gp_races=[]
+  gp_name=[]
+  for i in track_list:
+    list_of_gp_races.append('https://www.formula1.com'+i.get('href'))
+    #print(list_of_gp_races)
+    gp_name.append(i.text.strip())
+  #print(gp_name)
+  return (list_of_gp_races,gp_name,GP_day_month)
+
+def driver_info(list_call,name_gp):
+   GP_name=name_gp
+   Driver_no=list_call.find('td',class_="dark hide-for-mobile").text
+   name=list_call.find('span',class_="hide-for-tablet").text + list_call.find('span',class_="hide-for-mobile").text
+   team=list_call.find('td',class_="semi-bold uppercase hide-for-tablet").text
+   return (name_gp,Driver_no,name,team)
+
+
+
+def extracting_html_race_results(link_of_race_results,gp_name,year):
+  what='race_results'
+  html_text=urllib.request.urlopen(f'{link_of_race_results}')
+  soup=BeautifulSoup(html_text,'lxml')
+  table=soup.find('table',class_="resultsarchive-table")
+  list_=table.find_all('tr')
+  data=[]
+  for i in range(1,len(list_)):
+    item={}
+    item['GP_name'],  item['Driver_no'], item['name'],  item['team'] = driver_info(list_[i],gp_name)
+    item['position']=list_[i].find('td', class_="dark").text
+    item['laps']=list_[i].find('td',class_="bold hide-for-mobile").text
+    a=list_[i].find_all('td')
+    
+    item['Total_laps_time']=a[6].text
+    item['Points']=a[7].text
+    data.append(item)
+  export_to_excel(data,gp_name,what,year)
+  return
+def defining_Beautiful_soup(link_url):
+  read_link_url=urllib.request.urlopen(f'{link_url}')
+  soup=BeautifulSoup(read_link_url,'lxml')
+  table=soup.find('table',class_="resultsarchive-table")
+  list_from_bs4=table.find_all('tr')
+  return list_from_bs4
+
+def extracting_html_fastest_lap(link_of_race_results,gp_name,year):
+  what='fastest_lap'
+  replace_race_results_with_fastest_lap= link_of_race_results.replace('race-result','fastest-laps')
+  list_fastest_lap=defining_Beautiful_soup(replace_race_results_with_fastest_lap)
+  #print(list_fastest_lap)
+  data=[]
+  for i in range(1,len(list_fastest_lap)):
+    item={}
+    item['GP_name'],  item['Driver_no'], item['name'],  item['team'] = driver_info(list_fastest_lap[i],gp_name)
+    item['Which_position']=list_fastest_lap[i].find('td', class_="dark").text
+    a=list_fastest_lap[i].find_all('td')
+    
+    item['Time of day']=a[6].text.strip()
+    item['fastest_Lap_time']=a[7].text.strip()
+    item['fastest Lap Average Speed ']=a[8].text.strip()
+    data.append(item)
+  export_to_excel(data,gp_name,what,year)
+  return
+
+
+def extracting_html_pit_stop_summary(link_of_race_results,gp_name,year):
+  what='Pit_stop_summary'
+  replace_race_results_with_pit_stop_summary= link_of_race_results.replace('race-result','pit-stop-summary')
+  list_pit_stop_summary=defining_Beautiful_soup(replace_race_results_with_pit_stop_summary)
+  data=[]
+  for i in range(1,len(list_pit_stop_summary)):
+    item={}
+    item['GP_name'],  item['Driver_no'], item['name'],  item['team'] = driver_info(list_pit_stop_summary[i],gp_name)
+    item['Stop_no']=list_pit_stop_summary[i].find('td', class_="dark").text
+    a=list_pit_stop_summary[i].find_all('td')
+    item['lap_no']=a[5].text.split()
+    item['Time of day']=a[6].text.split()
+    item['Pit time']=a[7].text.split()
+    item['Total Pitting time']=a[8].text.split()
+    data.append(item)
+  export_to_excel(data,gp_name,what,year)
+  return
+
+
+def extracting_html_starting_grid(link_of_race_results,gp_name,year):
+  what='starting_grid'
+  replace_race_results_with_starting_grid= link_of_race_results.replace('race-result','starting-grid')
+  list_starting_grid=defining_Beautiful_soup(replace_race_results_with_starting_grid)
+  data=[]
+  for i in range(1,len(list_starting_grid)):
+    item={}
+    a=list_starting_grid[i].find_all('td')
+    item['GP_name']=gp_name
+    item['position_on_grid']=a[1]
+    item['Driver_no']=a[2]
+    item['name']=a[3].find('span',class_="first-name hide-for-tablet").text +" "+ a[3].find('span',class_="last-name hide-for-mobile").text
+    item['team']=a[4].text
+    item['Q3 time']=a[5].text
+    data.append(item)
+  
+  export_to_excel(data,gp_name,what,year)
+  return
+
+
+def extracting_html_qualifying(link_of_race_results,gp_name,year):
+  what='Qualifying'
+  replace_race_results_with_qualifying= link_of_race_results.replace('race-result','qualifying')
+  list_qualifying=defining_Beautiful_soup(replace_race_results_with_qualifying)
+  data=[]
+ 
+  for i in range(1,len(list_qualifying)):
+    item={}
+    item['GP_name'],  item['Driver_no'], item['name'],  item['team'] = driver_info( list_qualifying[i],gp_name)
+    item['Position']= list_qualifying[i].find('td', class_="dark").text
+    a= list_qualifying[i].find_all('td')
+    item['Q1']=a[5].text
+    item['Q2']=a[6].text
+    item['Q3']=a[7].text
+    item['laps']=a[8].text
+    data.append(item)
+  export_to_excel(data,gp_name,what,year)
+  
+
+def extracting_html_practice(link_of_race_results,gp_name,practice_no,year):
+  what=f'Practice_{practice_no}'
+  replace_race_results_with_practice= link_of_race_results.replace('race-result',f'practice-{practice_no}')
+  list_practice=defining_Beautiful_soup(replace_race_results_with_practice)
+  data=[]
+ 
+  for i in range(1,len(list_practice)):
+    item={}
+    item['GP_name'],  item['Driver_no'], item['name'],  item['team'] = driver_info( list_practice[i],gp_name)
+    item['Position']= list_practice[i].find('td', class_="dark").text
+    a= list_practice[i].find_all('td')
+    
+    item['time']=a[5].text
+    item['Gap']=a[6].text
+    item['lap']=a[7].text
+    data.append(item)
+  export_to_excel(data,gp_name,what,year)
+  return
+
+
+
+def export_to_excel(Data,gp_name,what,year):
+  df=pd.DataFrame(Data)
+  return df.to_excel(f'F1_{year}_{what}_{gp_name}.xlsx')
+
+if __name__=='__main__':
+  for year in [2021,2022]:
+    list_from_extracting_gp_links , gp_name ,GP_Day_Month      =      extracting_gp_links(year)
+    
+    for i in range(1,len(list_from_extracting_gp_links)):
+      day=int(GP_Day_Month.iloc[i,:][0])
+      month=GP_Day_Month.iloc[i,:][1]
+      extracting_html_fastest_lap(list_from_extracting_gp_links[i],gp_name[i],year,day,month)
+      
+      extracting_html_race_results(list_from_extracting_gp_links[i],gp_name[i],year,day,month)
+      
+      extracting_html_pit_stop_summary(list_from_extracting_gp_links[i],gp_name[i],year,day,month)
+
+      extracting_html_starting_grid(list_from_extracting_gp_links[i],gp_name[i],year,day,month)
+
+      extracting_html_qualifying(list_from_extracting_gp_links[i],gp_name[i],year,day-1,month)
+      
+      for practice_no in range(1,4):
+        
+        extracting_html_practice(list_from_extracting_gp_links[i],gp_name[i],practice_no,year)
